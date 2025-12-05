@@ -53,3 +53,4 @@ Thumbs.db
 /yarn-error.log
 /.yarnrc
 /.yarn/
+src/plugins/fortebank-kz/confidential_PDF_statements/
