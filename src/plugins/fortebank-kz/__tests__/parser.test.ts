@@ -54,9 +54,27 @@ describe('Fortebank Parser', () => {
       K Z 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8
       K Z T
       `
-      const header = parseHeader(headerText)
+      const header = parseHeader(headerText, 'en')
       expect(header.accountNumber).toBe('KZ123456789012345678')
       expect(header.currency).toBe('KZT')
+    })
+
+    it('should parse balance (RU)', () => {
+      const headerText = 'Доступно на 30.11.2025: 20860.52 KZT'
+      const header = parseHeader(headerText, 'ru')
+      expect(header.balance).toBe(20860.52)
+    })
+
+    it('should parse balance (EN)', () => {
+      const headerText = 'Available as of 30.11.2025: 15000.00 KZT'
+      const header = parseHeader(headerText, 'en')
+      expect(header.balance).toBe(15000.00)
+    })
+
+    it('should parse balance (KZ)', () => {
+      const headerText = 'Қолжетімді 02.12.2025: 15000.00 KZT'
+      const header = parseHeader(headerText, 'kz')
+      expect(header.balance).toBe(15000.00)
     })
   })
 
@@ -78,6 +96,26 @@ S o m e   S h o p
       expect(transactions[1].date).toBe('02.01.2023')
       expect(transactions[1].amount).toBe(1000.00)
       expect(transactions[1].description).toContain('Transfer')
+    })
+
+    it('should parse MCC from description', () => {
+      const transText = `
+      30.11.2025 -5550.00 KZT Покупка IP ZOKIROV,ALMATY,ALMATY,KZ, Kaspi Bank, MCC: 5411
+      `
+      const transactions = parseTransactions(transText)
+      expect(transactions).toHaveLength(1)
+      expect(transactions[0].mcc).toBe(5411)
+    })
+
+    it('should parse MCC from multiline description', () => {
+      const transText = `
+      30.11.2025 -3515.00 KZT Покупка
+      NAURYZ SHAKHRISTAN SHOP,ALMATY,ALMATY,KZ, JSC Ha
+      lyk Bank of Kazakhstan, MCC: 5411
+      `
+      const transactions = parseTransactions(transText)
+      expect(transactions).toHaveLength(1)
+      expect(transactions[0].mcc).toBe(5411)
     })
   })
 })

@@ -9,18 +9,26 @@ export interface ParsedSections {
 export interface ParsedHeader {
   accountNumber?: string
   currency?: string
+  balance?: number
 }
 
 export interface ParsedTransaction {
   date: string
   amount: number
   description: string
+  mcc?: number
 }
 
 const HEADERS: Record<Locale, string> = {
   en: 'D a t e S u m D e s c r i p t i o n D e t a i l s',
   ru: 'Д а т а С у м м а О п и с а н и е Д е т а л и з а ц и я',
   kz: 'К ү н і С о м а C и п а т т а м а с ы Т а л д а м а'
+}
+
+const BALANCE_REGEXES: Record<Locale, RegExp> = {
+  en: /Available\s*as\s*of\s*\d{2}\.\d{2}\.\d{4}:?\s*([-+]?[\d]+[.,]\d{2})/,
+  ru: /Доступно\s*на\s*\d{2}\.\d{2}\.\d{4}:?\s*([-+]?[\d]+[.,]\d{2})/,
+  kz: /Қолжетімді\s*\d{2}\.\d{2}\.\d{4}:?\s*([-+]?[\d]+[.,]\d{2})/
 }
 
 export function normalizeText (text: string): string {
@@ -86,7 +94,7 @@ export function splitSections (text: string, locale: Locale): ParsedSections {
   }
 }
 
-export function parseHeader (text: string): ParsedHeader {
+export function parseHeader (text: string, locale: Locale): ParsedHeader {
   const normalized = normalizeText(text)
 
   const ibanMatch = normalized.match(/KZ[0-9A-Z]{18}/)
@@ -95,9 +103,16 @@ export function parseHeader (text: string): ParsedHeader {
   const currencyMatch = normalized.match(/\b(KZT|USD|EUR|RUB|GBP)\b/)
   const currency = currencyMatch !== null ? currencyMatch[0] : undefined
 
+  const balanceMatch = normalized.match(BALANCE_REGEXES[locale])
+  let balance: number | undefined
+  if (balanceMatch !== null) {
+    balance = parseFloat(balanceMatch[1].replace(',', '.'))
+  }
+
   return {
     accountNumber,
-    currency
+    currency,
+    balance
   }
 }
 
@@ -136,6 +151,10 @@ export function parseTransactions (text: string): ParsedTransaction[] {
     const match = line.trim().match(rowStartRegex)
     if (match !== null) {
       if (currentTransaction !== null) {
+        const mccMatch = currentTransaction.description.match(/MCC:?\s*(\d{4})/)
+        if (mccMatch !== null) {
+          currentTransaction.mcc = parseInt(mccMatch[1], 10)
+        }
         transactions.push(currentTransaction)
       }
 
@@ -157,6 +176,10 @@ export function parseTransactions (text: string): ParsedTransaction[] {
   }
 
   if (currentTransaction !== null) {
+    const mccMatch = currentTransaction.description.match(/MCC:?\s*(\d{4})/)
+    if (mccMatch !== null) {
+      currentTransaction.mcc = parseInt(mccMatch[1], 10)
+    }
     transactions.push(currentTransaction)
   }
 

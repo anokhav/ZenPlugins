@@ -17,7 +17,7 @@ export const scrape: ScrapeFunc<Preferences> = async () => {
       const locale = detectLocale(text)
       const sections = splitSections(text, locale)
 
-      const parsedHeader = parseHeader(sections.header)
+      const parsedHeader = parseHeader(sections.header, locale)
       const parsedTransactions = parseTransactions(sections.transactions)
 
       const account = convertAccount(parsedHeader)

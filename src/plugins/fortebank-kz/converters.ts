@@ -9,7 +9,7 @@ export function convertAccount (header: ParsedHeader): Account {
     type: AccountType.checking,
     instrument: (header.currency != null && header.currency !== '') ? header.currency : 'KZT',
     syncIds: (header.accountNumber != null && header.accountNumber !== '') ? [header.accountNumber] : [],
-    balance: null
+    balance: header.balance ?? null
   }
 }
 
@@ -17,18 +17,11 @@ export function convertTransaction (transaction: ParsedTransaction, accountId: s
   const [day, month, year] = transaction.date.split('.')
   const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day))
 
-  const isExpense = transaction.amount < 0
-
-  // Simplify merchant creation
-  const merchant = isExpense
-    ? {
-        title: transaction.description,
-        country: null,
-        city: null,
-        mcc: null,
-        location: null
-      }
-    : null
+  const merchant = {
+    fullTitle: transaction.description,
+    mcc: transaction.mcc ?? null,
+    location: null
+  }
 
   return {
     date,
