@@ -1,28 +1,39 @@
-import { Account, ScrapeFunc, Transaction } from '../../types/zenmoney'
-import { fetchAccounts, fetchTransactions, login } from './api'
-import { convertAccounts, convertTransaction } from './converters'
-import { Auth, Preferences } from './models'
+import { ScrapeFunc, Account, Transaction } from '../../types/zenmoney'
+import { parsePdf } from '../../common/pdfUtils'
+import { Preferences } from './models'
+import { detectLocale, splitSections, parseHeader, parseTransactions } from './parser'
+import { convertAccount, convertTransaction } from './converters'
 
-export const scrape: ScrapeFunc<Preferences> = async ({ preferences, fromDate, toDate }) => {
-  toDate = toDate ?? new Date()
-  const session = await login(preferences, ZenMoney.getData('auth') as Auth | undefined)
-  ZenMoney.setData('auth', session.auth)
-  ZenMoney.saveData()
+export const scrape: ScrapeFunc<Preferences> = async () => {
+  const blobs = await ZenMoney.pickDocuments(['application/pdf'], true)
 
   const accounts: Account[] = []
   const transactions: Transaction[] = []
-  await Promise.all(convertAccounts(await fetchAccounts(session)).map(async ({ account, products }) => {
-    accounts.push(account)
-    if (ZenMoney.isAccountSkipped(account.id)) {
-      return
-    }
-    await Promise.all(products.map(async product => {
-      const apiTransactions = await fetchTransactions(session, product, fromDate, toDate ?? new Date())
-      for (const apiTransaction of apiTransactions) {
-        transactions.push(convertTransaction(apiTransaction, account))
+
+  for (const blob of blobs) {
+    try {
+      const { text } = await parsePdf(blob)
+
+      const locale = detectLocale(text)
+      const sections = splitSections(text, locale)
+
+      const parsedHeader = parseHeader(sections.header)
+      const parsedTransactions = parseTransactions(sections.transactions)
+
+      const account = convertAccount(parsedHeader)
+
+      const existingAccountIndex = accounts.findIndex(a => a.id === account.id)
+      if (existingAccountIndex === -1) {
+        accounts.push(account)
       }
-    }))
-  }))
+
+      const accountTransactions = parsedTransactions.map(pt => convertTransaction(pt, account.id))
+      transactions.push(...accountTransactions)
+    } catch (error) {
+      console.error('Failed to parse PDF', error)
+    }
+  }
+
   return {
     accounts,
     transactions

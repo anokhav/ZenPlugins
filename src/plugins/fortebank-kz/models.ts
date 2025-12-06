@@ -13,10 +13,7 @@ export interface Session {
 }
 
 // Input preferences from schema in preferences.xml
-export interface Preferences {
-  login: string
-  password: string
-}
+export type Preferences = Record<string, never>
 
 export interface Product {
   id: string

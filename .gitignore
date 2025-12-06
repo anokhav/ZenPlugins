@@ -54,3 +54,6 @@ Thumbs.db
 /.yarnrc
 /.yarn/
 src/plugins/fortebank-kz/confidential_PDF_statements/
+BUILD_PLAN.md
+GEMINI.md
+package-lock.json
