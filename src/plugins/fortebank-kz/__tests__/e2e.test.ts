@@ -55,11 +55,15 @@ describe('Fortebank KZ E2E Parsing', () => {
       expect(transactions).toHaveLength(10)
 
       // Transaction 1
-      expect(transactions[0]).toEqual({
+      expect(transactions[0]).toMatchObject({
         date: '30.11.2025',
         amount: -5550.00,
         description: expect.stringContaining('Покупка\nIP ZOKIROV'),
-        mcc: 5411
+        mcc: 5411,
+        operation: 'Покупка',
+        parsedDetails: expect.objectContaining({
+          mcc: 5411
+        })
       })
 
       // Transaction 7 (Multicurrency/Conversion case?)

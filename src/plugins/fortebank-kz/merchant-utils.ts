@@ -3,13 +3,15 @@ import { Merchant } from '../../types/zenmoney'
 const keywordsToRemove = [
   // Generic/English
   'Purchase', 'Payment', 'Transfer', 'Withdrawal', 'Commission', 'Fee', 'Correction', 'Reversal',
-  'Retail', 'POS', 'ATM', 'Terminal', 'Card', 'Account',
+  'Retail', 'POS', 'ATM', 'Terminal', 'Card', 'Account', 'Retail', 'Shop', 'Store', 'Market',
+  'Transaction', 'Date', 'Sum', 'Description', 'Details', 'Operation',
   // Russian
   'Покупка', 'Оплата', 'Перевод', 'Снятие', 'Комиссия', 'Возврат', 'Корректировка', 'Отмена',
-  'Розница', 'Банкомат', 'Терминал', 'Карта', 'Счет', 'Пополнение', 'Выплата',
+  'Розница', 'Банкомат', 'Терминал', 'Карта', 'Счет', 'Пополнение', 'Выплата', 'Магазин',
+  'Транзакция', 'Дата', 'Сумма', 'Описание', 'Детализация', 'Операция',
   // Kazakh (approximate, based on common terms)
   'Сатып алу', 'Төлем', 'Аударым', 'Ақша алу', 'Комиссия', 'Қайтару', 'Түзету', 'Болдырмау',
-  'Толықтыру'
+  'Толықтыру', 'Дүкен'
 ]
 
 const countryByCode: Record<string, string> = {
@@ -20,7 +22,17 @@ const countryByCode: Record<string, string> = {
   US: 'USA',
   GB: 'UK',
   TR: 'Turkey',
-  AE: 'UAE'
+  AE: 'UAE',
+  DE: 'Germany',
+  FR: 'France',
+  IT: 'Italy',
+  ES: 'Spain',
+  NL: 'Netherlands',
+  PL: 'Poland',
+  UA: 'Ukraine',
+  UZ: 'Uzbekistan',
+  KG: 'Kyrgyzstan',
+  TJ: 'Tajikistan'
 }
 
 const cityMatchers: Array<{ marker: RegExp, city: string, country?: string }> = [
@@ -52,13 +64,25 @@ const cityMatchers: Array<{ marker: RegExp, city: string, country?: string }> = 
   { marker: /DUBAI/i, city: 'Dubai', country: 'UAE' },
   { marker: /ISTANBUL/i, city: 'Istanbul', country: 'Turkey' },
   { marker: /MOSCOW/i, city: 'Moscow', country: 'Russia' },
-  { marker: /ST PETERSBURG/i, city: 'St. Petersburg', country: 'Russia' }
+  { marker: /ST.?PETERSBURG/i, city: 'St. Petersburg', country: 'Russia' },
+  { marker: /KIEV/i, city: 'Kiev', country: 'Ukraine' },
+  { marker: /KYIV/i, city: 'Kyiv', country: 'Ukraine' },
+  { marker: /TASHKENT/i, city: 'Tashkent', country: 'Uzbekistan' },
+  { marker: /BISHKEK/i, city: 'Bishkek', country: 'Kyrgyzstan' },
+  { marker: /DUSHANBE/i, city: 'Dushanbe', country: 'Tajikistan' }
 ]
 
 export function cleanMerchantTitle (text: string | null): string | null {
   if (text == null || text.trim() === '') return null
 
   let cleanedText = text
+
+  // Remove MCC, Dates, and long numeric IDs first
+  cleanedText = cleanedText
+    .replace(/MCC:?\s*\d{4}/gi, '')
+    .replace(/\b\d{2}\.\d{2}\.\d{2,4}\b/g, '') // Dates like 01.01.2023
+    .replace(/\b\d{6,}\b/g, '') // Long numeric IDs
+    .replace(/[<>]/g, ' ') // Formatting artifacts
 
   // Remove generic keywords
   for (const keyword of keywordsToRemove) {
@@ -168,27 +192,28 @@ export function parseMerchant (description: string): Merchant | null {
     city,
     country,
     mcc: null,
-    location: null,
-    category: null
-  } as unknown as Merchant
+    location: null
+    // category is optional (undefined)
+  }
 }
 
 export function cleanTransactionComment (text: string, merchant: Merchant | any): string {
   let cleaned = text
 
-  if (merchant.mcc != null) {
+  if (merchant?.mcc != null) {
     cleaned = cleaned.replace(/MCC:?\s*(\d{4})/gi, '')
   }
 
-  if (merchant.city != null) {
+  if (merchant?.city != null) {
     const matcher = cityMatchers.find(m => m.city === merchant.city)
     if (matcher != null) {
       cleaned = cleaned.replace(matcher.marker, '')
     }
   }
 
-  if (merchant.country != null) {
-    cleaned = cleaned.replace(/\b(KZ|CN|BY|RU|US|GB|TR|AE)\b/gi, '')
+  if (merchant?.country != null) {
+    const countryCodes = Object.keys(countryByCode).join('|')
+    cleaned = cleaned.replace(new RegExp(`\\b(${countryCodes})\\b`, 'gi'), '')
   }
 
   cleaned = cleaned.replace(/\b(KZT|USD|EUR|RUB|GBP)\b/gi, '')
