@@ -1,5 +1,6 @@
 import { Account, AccountType, Transaction } from '../../types/zenmoney'
 import { ParsedHeader, ParsedTransaction } from './parser'
+import { parseMerchant, cleanTransactionComment } from './merchant-utils'
 
 export function convertAccount (header: ParsedHeader): Account {
   const id = (header.accountNumber != null && header.accountNumber !== '') ? header.accountNumber : 'unknown-account'
@@ -17,17 +18,25 @@ export function convertTransaction (transaction: ParsedTransaction, accountId: s
   const [day, month, year] = transaction.date.split('.')
   const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day))
 
-  const merchant = {
-    fullTitle: transaction.description,
-    mcc: transaction.mcc ?? null,
-    location: null
+  let merchant: any = parseMerchant(transaction.description)
+
+  if (merchant !== null) {
+    merchant.mcc = transaction.mcc ?? null
+  } else {
+    merchant = {
+      fullTitle: transaction.description,
+      mcc: transaction.mcc ?? null,
+      location: null
+    }
   }
+
+  const comment = cleanTransactionComment(transaction.description, merchant)
 
   return {
     date,
     hold: false,
     merchant,
-    comment: transaction.description,
+    comment,
     movements: [{
       account: { id: accountId },
       sum: transaction.amount,

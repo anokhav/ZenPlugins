@@ -1,0 +1,198 @@
+import { Merchant } from '../../types/zenmoney'
+
+const keywordsToRemove = [
+  // Generic/English
+  'Purchase', 'Payment', 'Transfer', 'Withdrawal', 'Commission', 'Fee', 'Correction', 'Reversal',
+  'Retail', 'POS', 'ATM', 'Terminal', 'Card', 'Account',
+  // Russian
+  'Покупка', 'Оплата', 'Перевод', 'Снятие', 'Комиссия', 'Возврат', 'Корректировка', 'Отмена',
+  'Розница', 'Банкомат', 'Терминал', 'Карта', 'Счет', 'Пополнение', 'Выплата',
+  // Kazakh (approximate, based on common terms)
+  'Сатып алу', 'Төлем', 'Аударым', 'Ақша алу', 'Комиссия', 'Қайтару', 'Түзету', 'Болдырмау',
+  'Толықтыру'
+]
+
+const countryByCode: Record<string, string> = {
+  KZ: 'Kazakhstan',
+  CN: 'China',
+  BY: 'Belarus',
+  RU: 'Russia',
+  US: 'USA',
+  GB: 'UK',
+  TR: 'Turkey',
+  AE: 'UAE'
+}
+
+const cityMatchers: Array<{ marker: RegExp, city: string, country?: string }> = [
+  { marker: /ALMATY/i, city: 'Almaty', country: 'Kazakhstan' },
+  { marker: /ASTANA/i, city: 'Astana', country: 'Kazakhstan' },
+  { marker: /NUR-SULTAN/i, city: 'Astana', country: 'Kazakhstan' },
+  { marker: /SHYMKENT/i, city: 'Shymkent', country: 'Kazakhstan' },
+  { marker: /KARAGANDA/i, city: 'Karaganda', country: 'Kazakhstan' },
+  { marker: /AKTOBE/i, city: 'Aktobe', country: 'Kazakhstan' },
+  { marker: /TARAZ/i, city: 'Taraz', country: 'Kazakhstan' },
+  { marker: /PAVLODAR/i, city: 'Pavlodar', country: 'Kazakhstan' },
+  { marker: /UST-KAMENOGORSK/i, city: 'Ust-Kamenogorsk', country: 'Kazakhstan' },
+  { marker: /SEMEY/i, city: 'Semey', country: 'Kazakhstan' },
+  { marker: /ATYRAU/i, city: 'Atyrau', country: 'Kazakhstan' },
+  { marker: /KYZYLORDA/i, city: 'Kyzylorda', country: 'Kazakhstan' },
+  { marker: /KOSTANAY/i, city: 'Kostanay', country: 'Kazakhstan' },
+  { marker: /URALSK/i, city: 'Uralsk', country: 'Kazakhstan' },
+  { marker: /PETROPAVLOVSK/i, city: 'Petropavlovsk', country: 'Kazakhstan' },
+  { marker: /TURKISTAN/i, city: 'Turkistan', country: 'Kazakhstan' },
+  { marker: /KOKSHETAU/i, city: 'Kokshetau', country: 'Kazakhstan' },
+  { marker: /TEMIRTAU/i, city: 'Temirtau', country: 'Kazakhstan' },
+  { marker: /TALDYKORGAN/i, city: 'Taldykorgan', country: 'Kazakhstan' },
+  { marker: /EKIBASTUZ/i, city: 'Ekibastuz', country: 'Kazakhstan' },
+  { marker: /RUDNY/i, city: 'Rudny', country: 'Kazakhstan' },
+  { marker: /ZHEZKAZGAN/i, city: 'Zhezkazgan', country: 'Kazakhstan' },
+  // Foreign
+  { marker: /LONDON/i, city: 'London', country: 'UK' },
+  { marker: /NEW YORK/i, city: 'New York', country: 'USA' },
+  { marker: /DUBAI/i, city: 'Dubai', country: 'UAE' },
+  { marker: /ISTANBUL/i, city: 'Istanbul', country: 'Turkey' },
+  { marker: /MOSCOW/i, city: 'Moscow', country: 'Russia' },
+  { marker: /ST PETERSBURG/i, city: 'St. Petersburg', country: 'Russia' }
+]
+
+export function cleanMerchantTitle (text: string | null): string | null {
+  if (text == null || text.trim() === '') return null
+
+  let cleanedText = text
+
+  // Remove generic keywords
+  for (const keyword of keywordsToRemove) {
+    cleanedText = cleanedText.replace(new RegExp(`\\b${keyword}\\b`, 'gi'), '')
+  }
+
+  // Remove artifacts and extra spaces
+  cleanedText = cleanedText
+    .replace(/["']/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+
+  return cleanedText.length > 0 ? cleanedText : null
+}
+
+export function detectCityCountryLocation (text: string | null): { city?: string | null, country?: string | null, locationPoint: string } | null {
+  if (text == null) return null
+  const upper = text.toUpperCase()
+
+  let country: string | null = null
+  // Look for country code at the end (e.g. "MerchName KZ")
+  const codeMatch = upper.match(/\b([A-Z]{2})\s*$/)
+  if (codeMatch?.[1] != null && countryByCode[codeMatch[1]] != null) {
+    country = countryByCode[codeMatch[1]]
+  }
+
+  let city: string | null = null
+  let cityCountry: string | undefined
+  for (const matcher of cityMatchers) {
+    if (matcher.marker.test(upper)) {
+      city = matcher.city
+      cityCountry = matcher.country
+      break
+    }
+  }
+
+  const hasLocation = city !== null || country !== null
+  const locationPoint = cleanLocationPoint(text, hasLocation)
+
+  if (!hasLocation) {
+    return { locationPoint }
+  }
+
+  return { city, country: cityCountry ?? country, locationPoint }
+}
+
+function cleanLocationPoint (text: string, hasLocation: boolean): string {
+  let result = text
+
+  // Common prefixes/suffixes to strip
+  const stripPatterns = [
+    /^\s*IP\s+/i,
+    /^TOO\s+/i,
+    /^LLP\s+/i,
+    /^JSC\s+/i,
+    /^AO\s+/i,
+    /^\s*G\.?\s+/i, // Gorod
+    /^\s*K\.?\s+/i // Kala
+  ]
+
+  for (const pattern of stripPatterns) {
+    result = result.replace(pattern, '')
+  }
+
+  // Remove city names if they are part of the merchant string and we found a location
+  const markers = cityMatchers.map(m => m.marker)
+  for (const marker of markers) {
+    result = result.replace(marker, '')
+  }
+
+  if (hasLocation) {
+    // Remove trailing country codes
+    result = result.replace(/\b(KZ|CN|BY|RU|US|GB|TR|AE)\b/gi, '')
+  }
+
+  result = result.replace(/\s{2,}/g, ' ').trim()
+  result = result.replace(/[.,]+$/, '').trim()
+
+  return result
+}
+
+export function parseMerchant (description: string): Merchant | null {
+  const cleanedTitle = cleanMerchantTitle(description)
+
+  if (cleanedTitle === null) {
+    return null
+  }
+
+  const loc = detectCityCountryLocation(cleanedTitle)
+
+  let title = cleanedTitle
+  let city: string | null = null
+  let country: string | null = null
+
+  if (loc !== null) {
+    title = loc.locationPoint
+    city = loc.city ?? null
+    country = loc.country ?? null
+  }
+
+  if (title === '') {
+    return null
+  }
+
+  return {
+    title,
+    city,
+    country,
+    mcc: null,
+    location: null,
+    category: null
+  } as unknown as Merchant
+}
+
+export function cleanTransactionComment (text: string, merchant: Merchant | any): string {
+  let cleaned = text
+
+  if (merchant.mcc != null) {
+    cleaned = cleaned.replace(/MCC:?\s*(\d{4})/gi, '')
+  }
+
+  if (merchant.city != null) {
+    const matcher = cityMatchers.find(m => m.city === merchant.city)
+    if (matcher != null) {
+      cleaned = cleaned.replace(matcher.marker, '')
+    }
+  }
+
+  if (merchant.country != null) {
+    cleaned = cleaned.replace(/\b(KZ|CN|BY|RU|US|GB|TR|AE)\b/gi, '')
+  }
+
+  cleaned = cleaned.replace(/\b(KZT|USD|EUR|RUB|GBP)\b/gi, '')
+
+  cleaned = cleaned.replace(/\s{2,}/g, ' ').trim()
+  return cleaned
+}

@@ -31,6 +31,10 @@ export const scrape: ScrapeFunc<Preferences> = async () => {
       transactions.push(...accountTransactions)
     } catch (error) {
       console.error('Failed to parse PDF', error)
+      if (error instanceof Error && error.message === 'Unknown locale') {
+        throw new Error('The document is not recognized as a Fortebank statement. Please ensure you uploaded the correct PDF file.')
+      }
+      throw error
     }
   }
 

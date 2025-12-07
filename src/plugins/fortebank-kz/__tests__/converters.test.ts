@@ -48,12 +48,34 @@ describe('Fortebank Converters', () => {
       expect(transaction.date).toEqual(new Date(2023, 0, 1))
       expect(transaction.movements[0].sum).toBe(-100.00)
       expect((transaction.movements[0].account as AccountReferenceById).id).toBe('acc1')
+      // Expect parsed merchant
       expect(transaction.merchant).toEqual({
-        fullTitle: 'Purchase Shop',
+        title: 'Shop',
+        city: null,
+        country: null,
         mcc: 5411,
-        location: null
+        location: null,
+        category: null
       })
       expect(transaction.comment).toBe('Purchase Shop')
+    })
+
+    it('should convert transaction with location', () => {
+      const pt = {
+        date: '03.01.2023',
+        amount: -500.00,
+        description: 'Payment Starbucks Almaty KZ'
+      }
+      const transaction = convertTransaction(pt, 'acc1')
+      expect(transaction.merchant).toEqual({
+        title: 'Starbucks',
+        city: 'Almaty',
+        country: 'Kazakhstan',
+        mcc: null,
+        location: null,
+        category: null
+      })
+      expect(transaction.comment).toBe('Payment Starbucks')
     })
 
     it('should convert parsed income transaction', () => {
