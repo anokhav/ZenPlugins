@@ -53,13 +53,16 @@ const KNOWN_OPERATIONS = [
   'Refund',
   'Purchase with bonuses',
   'Purchase',
+  'Payment',
   // Russian
-  'Снятие наличных', 'Снятие',
+  'Снятие наличных денег', 'Снятие наличных', 'Снятие',
   'Пополнение счета', 'Пополнение',
   'Перевод',
-  'Возврат',
+  'Возврат денег', 'Возврат',
   'Покупка с бонусами', 'Покупка',
   'Оплата',
+  'Платеж',
+  'Списание',
   // Kazakh
   'Ақша алу',
   'Шотты толықтыру', 'Толықтыру',
@@ -159,10 +162,16 @@ function detectOperation (fullDescription: string, amount: number): { operation:
   const sortedOps = [...KNOWN_OPERATIONS].sort((a, b) => b.length - a.length)
 
   for (const op of sortedOps) {
-    if (fullDescription.startsWith(op)) {
+    // Escape special regex chars if any (unlikely in this list but safe) and allow whitespace/newlines for spaces
+    const escapedOp = op.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const regexPattern = '^' + escapedOp.replace(/\s+/g, '\\s+')
+    const regex = new RegExp(regexPattern, 'i') // Case insensitive maybe? No, keeping case sensitive as per previous logic, or 'i' for robustness? Text is normalized.
+
+    const match = fullDescription.match(regex)
+    if (match !== null) {
       return {
         operation: op,
-        details: fullDescription.substring(op.length).trim()
+        details: fullDescription.substring(match[0].length).trim()
       }
     }
   }
@@ -180,8 +189,8 @@ function parseTransactionDetails (operation: string, details: string): ParsedTra
 
   // Normalize operation to EN for easier matching if needed, or just list all variants
   // For now, check against list or generic logic
-  const isPurchase = ['Purchase', 'Purchase with bonuses', 'Refund', 'Покупка', 'Покупка с бонусами', 'Возврат', 'Оплата', 'Сатып алу', 'Қайтару', 'Төлем'].includes(operation)
-  const isWithdrawal = ['Cash withdrawal', 'Снятие наличных', 'Снятие', 'Ақша алу'].includes(operation)
+  const isPurchase = ['Purchase', 'Purchase with bonuses', 'Refund', 'Покупка', 'Покупка с бонусами', 'Возврат', 'Возврат денег', 'Оплата', 'Сатып алу', 'Қайтару', 'Төлем', 'Платеж', 'Списание'].includes(operation)
+  const isWithdrawal = ['Cash withdrawal', 'Снятие наличных', 'Снятие', 'Снятие наличных денег', 'Ақша алу'].includes(operation)
   const isTransfer = ['Transfer', 'Перевод', 'Аударым'].includes(operation)
 
   if (isWithdrawal) {
@@ -286,7 +295,8 @@ export function parseTransactions (text: string): ParsedTransaction[] {
     let fullDesc = t.description.trim()
 
     // Strip currency code from start if present (e.g. "KZT Purchase...")
-    const currencyMatch = fullDesc.match(/^(KZT|USD|EUR|RUB|GBP)\s+/)
+    // Optionally allow space, because sometimes it is "KZTПокупка"
+    const currencyMatch = fullDesc.match(/^(KZT|USD|EUR|RUB|GBP)\s?/)
     if (currencyMatch !== null) {
       fullDesc = fullDesc.substring(currencyMatch[0].length)
     }
