@@ -45,7 +45,8 @@ describe('Fortebank Converters', () => {
         description: 'Purchase SuperStore',
         mcc: 5411,
         operation: 'Purchase',
-        details: 'SuperStore'
+        details: 'SuperStore',
+        originString: ''
       }
       const transaction = convertTransaction(pt, 'acc1')
       expect(transaction.date).toEqual(new Date(2023, 0, 1))
@@ -68,7 +69,8 @@ describe('Fortebank Converters', () => {
         amount: -500.00,
         description: 'Payment Starbucks Almaty KZ',
         operation: 'Payment',
-        details: 'Starbucks Almaty KZ'
+        details: 'Starbucks Almaty KZ',
+        originString: ''
       }
       const transaction = convertTransaction(pt, 'acc1')
       expect(transaction.merchant).toEqual({
@@ -87,7 +89,8 @@ describe('Fortebank Converters', () => {
         amount: 1000.00,
         description: 'Transfer',
         operation: 'Transfer',
-        details: ''
+        details: '',
+        originString: ''
       }
       const transaction = convertTransaction(pt, 'acc1')
       expect(transaction.date).toEqual(new Date(2023, 0, 2))
@@ -107,7 +110,8 @@ describe('Fortebank Converters', () => {
           merchantBank: 'Halyk Bank',
           atmCode: 'ATM 12345',
           merchantLocation: 'Almaty, KZ'
-        }
+        },
+        originString: ''
       }
 
       const transaction = convertTransaction(pt, 'acc1')
@@ -127,7 +131,8 @@ describe('Fortebank Converters', () => {
           merchantName: 'Apple Services',
           merchantBank: 'Bank X',
           mcc: 1234
-        }
+        },
+        originString: ''
       }
 
       const transaction = convertTransaction(pt, 'acc1')

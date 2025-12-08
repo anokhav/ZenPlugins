@@ -19,6 +19,7 @@ export interface ParsedTransactionDetails {
   paymentMethod?: string
   atmCode?: string
   receiver?: string
+  receiverAccount?: string
   mcc?: number
 }
 
@@ -30,6 +31,7 @@ export interface ParsedTransaction {
   details: string
   parsedDetails?: ParsedTransactionDetails
   mcc?: number // Kept for backward compatibility, but should be in parsedDetails
+  originString: string
 }
 
 const HEADERS: Record<Locale, string> = {
@@ -201,6 +203,23 @@ function parseTransactionDetails (operation: string, details: string): ParsedTra
     if (parts.length >= 3) res.merchantLocation = parts.slice(2).join(', ')
   } else if (isTransfer) {
     res.receiver = details
+    // Attempt to extract account number (IBAN or Card)
+    // IBAN: KZ + 18 alphanumeric
+    // Card: 16 digits, or masked (123456******1234 or ****1234)
+    const ibanMatch = details.match(/\b(KZ[0-9A-Z]{18})\b/)
+    const cardMatch = details.match(/\b(\d{16})\b/)
+    const maskedCardMatch = details.match(/\b(\d{6}[*]+\d{4})\b/)
+    const shortMaskedCardMatch = details.match(/(?:^|[^\d])([*]{4}\d{4})\b/)
+
+    if (ibanMatch !== null) {
+      res.receiverAccount = ibanMatch[1]
+    } else if (cardMatch !== null) {
+      res.receiverAccount = cardMatch[1]
+    } else if (maskedCardMatch !== null) {
+      res.receiverAccount = maskedCardMatch[1]
+    } else if (shortMaskedCardMatch !== null) {
+      res.receiverAccount = shortMaskedCardMatch[1]
+    }
   } else if (isPurchase) {
     // Expected: title, location, bank, mcc, payment method
     // But fields are optional and variable. Anchor is "MCC:".
@@ -335,11 +354,13 @@ export function parseTransactions (text: string): ParsedTransaction[] {
         amount,
         description,
         operation: '',
-        details: ''
+        details: '',
+        originString: line
       }
     } else {
       if (currentTransaction !== null && line.trim() !== '') {
         currentTransaction.description += '\n' + line.trim()
+        currentTransaction.originString += '\n' + line
       }
     }
   }

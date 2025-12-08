@@ -1,4 +1,4 @@
-import { Account, AccountType, Transaction, Merchant } from '../../types/zenmoney'
+import { Account, AccountType, Transaction, Merchant, Movement } from '../../types/zenmoney'
 import { ParsedHeader, ParsedTransaction } from './parser'
 import { parseMerchant, cleanTransactionComment, detectCityCountryLocation } from './merchant-utils'
 
@@ -30,9 +30,16 @@ export function convertTransaction (transaction: ParsedTransaction, accountId: s
 
   let merchant: Merchant | null = null
   let comment = transaction.description
+  const movements: Movement[] = [{
+    account: { id: accountId },
+    sum: transaction.amount,
+    invoice: null,
+    fee: 0,
+    id: null
+  }]
 
   if (transaction.parsedDetails != null) {
-    const { merchantName, merchantLocation, merchantBank, paymentMethod, atmCode, receiver, mcc } = transaction.parsedDetails
+    const { merchantName, merchantLocation, merchantBank, paymentMethod, atmCode, receiver, receiverAccount, mcc } = transaction.parsedDetails
 
     // Construct merchant
     if (merchantName != null && merchantName !== '') {
@@ -67,25 +74,35 @@ export function convertTransaction (transaction: ParsedTransaction, accountId: s
       merchant.mcc = mcc ?? null
     } else if (receiver != null && receiver !== '') {
       // For transfers, receiver is the "payee"
+      // Always create merchant to preserve the name (e.g. "Ivanov I.")
       merchant = createMerchant(receiver)
+    }
+
+    if (receiverAccount != null) {
+      movements.push({
+        account: {
+          syncIds: [receiverAccount],
+          instrument: 'KZT', // Defaulting to KZT as safest guess or optional
+          type: AccountType.checking,
+          company: null
+        },
+        sum: -transaction.amount,
+        invoice: null,
+        fee: 0,
+        id: null
+      })
     }
 
     // Construct comment
     const commentParts: string[] = []
     if (merchantBank != null && merchantBank !== '') commentParts.push(`Bank: ${merchantBank}`)
     if (atmCode != null && atmCode !== '') commentParts.push(`ATM: ${atmCode}`)
-    // Add locationPoint to comment if needed (though it might be redundant if it's just city)
-    // For now, let's skip it to avoid clutter, or add if it looks like an address?
-    // User instruction: "If locationPoint is present... append it to comment"
-    // But I don't have locationPoint in scope here easily unless I lift it out.
-    // Let's re-calculate or just use merchantLocation if available and not fully consumed.
-    // Actually, simplifying: strict adherence to avoiding "location: string" error is key.
 
     if (paymentMethod != null && paymentMethod !== '') commentParts.push(paymentMethod)
-    if (receiver != null && receiver !== '' && merchant === null) commentParts.push(`Receiver: ${receiver}`)
+    if (receiver != null && receiver !== '' && merchant === null && receiverAccount == null) commentParts.push(`Receiver: ${receiver}`)
 
     // If no specific parsed details other than operation, use cleaned description
-    if (commentParts.length === 0 && merchant === null) {
+    if (commentParts.length === 0 && merchant === null && receiverAccount == null) {
       comment = cleanTransactionComment(transaction.description, null)
     } else {
       comment = commentParts.join(', ')
@@ -98,23 +115,17 @@ export function convertTransaction (transaction: ParsedTransaction, accountId: s
       merchant.city = parsed.city
       merchant.country = parsed.country
       merchant.mcc = transaction.mcc ?? null
-      // parsed.location is also likely null or incompatible if coming from utils?
-      // utils returns { location: null } as Merchant (casted). So it's safe.
     }
     comment = cleanTransactionComment(transaction.description, merchant)
   }
 
-  return {
+  const result: Transaction & { originString: string } = {
     date,
     hold: false,
     merchant,
     comment,
-    movements: [{
-      account: { id: accountId },
-      sum: transaction.amount,
-      invoice: null,
-      fee: 0,
-      id: null
-    }]
+    movements: movements as [Movement] | [Movement, Movement],
+    originString: transaction.originString
   }
+  return result
 }
